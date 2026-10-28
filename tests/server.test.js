@@ -17,7 +17,11 @@ before(async () => {
   const config = loadConfig({});
   server = createApp({
     config,
-    planner: createPlanner({ gemini: fakeGemini(), cache: new LruCache({ maxEntries: 10, ttlMs: 60_000 }), logger: silentLogger }),
+    planner: createPlanner({
+      gemini: fakeGemini(),
+      cache: new LruCache({ maxEntries: 10, ttlMs: 60_000 }),
+      logger: silentLogger,
+    }),
     limiter: new RateLimiter({ capacity: 5, windowMs: 60_000 }),
     assets: loadAssets(fileURLToPath(new URL('../public', import.meta.url))),
     aiEnabled: true,
@@ -32,11 +36,12 @@ before(async () => {
 after(() => new Promise((resolve) => server.close(() => resolve(undefined))));
 
 /** @param {unknown} body @param {Record<string, string>} [headers] */
-const postPlan = (body, headers = {}) => fetch(`${base}/api/plan`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '203.0.113.1', ...headers },
-  body: typeof body === 'string' ? body : JSON.stringify(body),
-});
+const postPlan = (body, headers = {}) =>
+  fetch(`${base}/api/plan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '203.0.113.1', ...headers },
+    body: typeof body === 'string' ? body : JSON.stringify(body),
+  });
 
 describe('HTTP server', () => {
   it('serves the app shell with security headers and compression', async () => {
@@ -89,7 +94,11 @@ describe('HTTP server', () => {
 
   it('rejects wrong content type, malformed JSON, oversized bodies and wrong methods', async () => {
     const ip = { 'X-Forwarded-For': '203.0.113.3' };
-    assert.equal((await fetch(`${base}/api/plan`, { method: 'POST', headers: { ...ip, 'Content-Type': 'text/plain' }, body: 'x' })).status, 415);
+    assert.equal(
+      (await fetch(`${base}/api/plan`, { method: 'POST', headers: { ...ip, 'Content-Type': 'text/plain' }, body: 'x' }))
+        .status,
+      415,
+    );
     assert.equal((await postPlan('{bad', ip)).status, 400);
     assert.equal((await postPlan({ notes: 'x'.repeat(20_000) }, ip)).status, 413);
     const get = await fetch(`${base}/api/plan`);

@@ -1,7 +1,7 @@
 {
   "name": "utsav-ai-event-planner",
   "version": "1.0.0",
-  "description": "GenAI-powered planning assistant for weddings, birthdays and community events: budgets, timelines, vendor checklists and personalised ideas (Gemini + Cloud Run).",
+  "description": "GenAI-powered planning assistant for weddings, birthdays and community events: budgets, timelines, vendor checklists and personalised ideas (Google Gemini).",
   "type": "module",
   "main": "src/server.js",
   "engines": {
@@ -12,19 +12,27 @@
     "dev": "node --watch src/server.js",
     "test": "node --test \"tests/**/*.test.js\"",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-exclude=\"tests/**\" \"tests/**/*.test.js\"",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "typecheck": "tsc -p .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run lint && npm run typecheck && npm run format:check && npm test"
   },
   "keywords": [
     "event-planning",
     "gemini",
     "genai",
+    "vercel",
     "cloud-run",
     "accessibility"
   ],
   "license": "MIT",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/node": "^22.20.5",
     "eslint": "^10.13.0",
-    "globals": "^17.13.0"
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
+    "typescript": "^7.0.2"
   }
 }

@@ -19,7 +19,11 @@ const UNSAFE_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F<>]/g;
  */
 export function sanitizeText(value, maxLength) {
   if (typeof value !== 'string') return '';
-  return value.replace(UNSAFE_CHARS, '').replace(/[ \t]+/g, ' ').trim().slice(0, maxLength);
+  return value
+    .replace(UNSAFE_CHARS, '')
+    .replace(/[ \t]+/g, ' ')
+    .trim()
+    .slice(0, maxLength);
 }
 
 /**
@@ -101,6 +105,7 @@ export function validatePlanRequest(body, now = new Date()) {
     errors.currency = `Currency must be one of: ${CURRENCIES.join(', ')}.`;
   }
 
+  /** @type {string[]} */
   let priorities = [];
   if (input.priorities !== undefined) {
     if (!Array.isArray(input.priorities)) {

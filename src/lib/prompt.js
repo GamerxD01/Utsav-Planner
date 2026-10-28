@@ -27,7 +27,10 @@ export const RESPONSE_SCHEMA = Object.freeze({
         properties: {
           title: { type: 'STRING' },
           description: { type: 'STRING' },
-          category: { type: 'STRING', enum: ['theme', 'food', 'decor', 'entertainment', 'guest-experience', 'sustainability'] },
+          category: {
+            type: 'STRING',
+            enum: ['theme', 'food', 'decor', 'entertainment', 'guest-experience', 'sustainability'],
+          },
         },
         required: ['title', 'description', 'category'],
       },
@@ -88,7 +91,10 @@ const MAX = 240;
  */
 function stringList(list, limit) {
   if (!Array.isArray(list)) return [];
-  return list.map((s) => sanitizeText(s, MAX)).filter(Boolean).slice(0, limit);
+  return list
+    .map((s) => sanitizeText(s, MAX))
+    .filter(Boolean)
+    .slice(0, limit);
 }
 
 /**

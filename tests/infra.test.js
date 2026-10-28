@@ -61,7 +61,10 @@ describe('RateLimiter', () => {
 
 describe('clientIp', () => {
   it('prefers the first X-Forwarded-For hop, then the socket', () => {
-    assert.equal(clientIp(/** @type {any} */ ({ headers: { 'x-forwarded-for': '1.2.3.4, 10.0.0.1' }, socket: {} })), '1.2.3.4');
+    assert.equal(
+      clientIp(/** @type {any} */ ({ headers: { 'x-forwarded-for': '1.2.3.4, 10.0.0.1' }, socket: {} })),
+      '1.2.3.4',
+    );
     assert.equal(clientIp(/** @type {any} */ ({ headers: {}, socket: { remoteAddress: '::1' } })), '::1');
   });
 });

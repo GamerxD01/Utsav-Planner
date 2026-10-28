@@ -14,31 +14,62 @@ import { NOW, fakeGemini, silentLogger, validBody } from './helpers.js';
 function fakeRes() {
   const headers = {};
   let resolveDone;
-  const done = new Promise((r) => { resolveDone = r; });
+  const done = new Promise((r) => {
+    resolveDone = r;
+  });
   return {
-    headers, done, status: 0, body: '', headersSent: false,
-    setHeader(k, v) { headers[k.toLowerCase()] = v; },
-    writeHead(s) { this.status = s; this.headersSent = true; return this; },
-    end(b) { this.body = b ?? ''; resolveDone(); },
+    headers,
+    done,
+    status: 0,
+    body: '',
+    headersSent: false,
+    setHeader(k, v) {
+      headers[k.toLowerCase()] = v;
+    },
+    writeHead(s) {
+      this.status = s;
+      this.headersSent = true;
+      return this;
+    },
+    end(b) {
+      this.body = b ?? '';
+      resolveDone();
+    },
   };
 }
 
 /** Request whose body was already parsed by the platform (as on Vercel). */
 const fakeReq = (body, { getterThrows = false } = {}) => {
-  const req = { method: 'POST', url: '/api/plan', headers: { 'content-type': 'application/json', 'x-forwarded-for': '192.0.2.1' }, socket: {} };
-  Object.defineProperty(req, 'body', { enumerable: true, get() { if (getterThrows) throw new Error('Invalid JSON'); return body; } });
+  const req = {
+    method: 'POST',
+    url: '/api/plan',
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': '192.0.2.1' },
+    socket: {},
+  };
+  Object.defineProperty(req, 'body', {
+    enumerable: true,
+    get() {
+      if (getterThrows) throw new Error('Invalid JSON');
+      return body;
+    },
+  });
   return req;
 };
 
-const handler = () => createHandler({
-  config: loadConfig({}),
-  planner: createPlanner({ gemini: fakeGemini(), cache: new LruCache({ maxEntries: 5, ttlMs: 1000 }), logger: silentLogger }),
-  limiter: new RateLimiter({ capacity: 5, windowMs: 60_000 }),
-  assets: new Map(),
-  aiEnabled: true,
-  now: () => NOW,
-  logger: silentLogger,
-});
+const handler = () =>
+  createHandler({
+    config: loadConfig({}),
+    planner: createPlanner({
+      gemini: fakeGemini(),
+      cache: new LruCache({ maxEntries: 5, ttlMs: 1000 }),
+      logger: silentLogger,
+    }),
+    limiter: new RateLimiter({ capacity: 5, windowMs: 60_000 }),
+    assets: new Map(),
+    aiEnabled: true,
+    now: () => NOW,
+    logger: silentLogger,
+  });
 
 describe('serverless (Vercel) support', () => {
   it('handles a body the platform already parsed', async () => {
@@ -61,8 +92,14 @@ describe('serverless (Vercel) support', () => {
     assert.deepEqual(preParsedBody('{"a":1}', 100), { a: 1 });
     assert.deepEqual(preParsedBody(Buffer.from('{"a":2}'), 100), { a: 2 });
     assert.deepEqual(preParsedBody({ a: 3 }, 100), { a: 3 });
-    assert.throws(() => preParsedBody('{bad', 100), (e) => e instanceof HttpError && e.status === 400);
-    assert.throws(() => preParsedBody({ x: 'y'.repeat(200) }, 100), (e) => e instanceof HttpError && e.status === 413);
+    assert.throws(
+      () => preParsedBody('{bad', 100),
+      (e) => e instanceof HttpError && e.status === 400,
+    );
+    assert.throws(
+      () => preParsedBody({ x: 'y'.repeat(200) }, 100),
+      (e) => e instanceof HttpError && e.status === 413,
+    );
   });
 
   it('buildDeps wires fallback mode without an API key', () => {

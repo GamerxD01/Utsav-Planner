@@ -1,10 +1,25 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { buildIcs, escapeIcsText, foldIcsLine, formatDate, formatMoney, progressKey, toPayload, validatePayload } from '../public/js/format.js';
+import {
+  buildIcs,
+  escapeIcsText,
+  foldIcsLine,
+  formatDate,
+  formatMoney,
+  progressKey,
+  todayIso,
+  toPayload,
+  validatePayload,
+} from '../public/js/format.js';
 
 const plan = {
   event: { type: 'birthday', name: 'Maya turns 30', date: '2026-12-12' },
-  timeline: [{ phase: 'Final weeks', tasks: [{ id: 'b-cake', text: 'Order the cake, nut-free; chocolate', dueDate: '2026-11-28' }] }],
+  timeline: [
+    {
+      phase: 'Final weeks',
+      tasks: [{ id: 'b-cake', text: 'Order the cake, nut-free; chocolate', dueDate: '2026-11-28' }],
+    },
+  ],
 };
 
 describe('front-end formatting helpers', () => {
@@ -30,12 +45,24 @@ describe('front-end formatting helpers', () => {
     assert.match(ics, /SUMMARY:Order the cake\\, nut-free\\; chocolate/);
   });
 
+  it('todayIso uses the local calendar date', () => {
+    assert.equal(todayIso(new Date(2026, 9, 28, 23, 59)), '2026-10-28');
+    assert.match(todayIso(), /^\d{4}-\d{2}-\d{2}$/);
+  });
+
   it('creates a stable progress key', () => {
     assert.equal(progressKey(plan), 'utsav:progress:birthday:2026-12-12:Maya turns 30');
   });
 
   it('maps form values to the API payload', () => {
-    const payload = toPayload({ eventType: 'wedding', eventDate: '2027-01-01', guestCount: '100', budget: '50000', priorities: 'food', notes: '  hi ' });
+    const payload = toPayload({
+      eventType: 'wedding',
+      eventDate: '2027-01-01',
+      guestCount: '100',
+      budget: '50000',
+      priorities: 'food',
+      notes: '  hi ',
+    });
     assert.equal(payload.guestCount, 100);
     assert.deepEqual(payload.priorities, ['food']);
     assert.equal(payload.currency, 'INR');
@@ -43,8 +70,14 @@ describe('front-end formatting helpers', () => {
   });
 
   it('validates on the client', () => {
-    const errors = validatePayload(toPayload({ eventDate: '2020-01-01', guestCount: '0', budget: '', priorities: ['a', 'b', 'c', 'd'] }), '2026-10-28');
+    const errors = validatePayload(
+      toPayload({ eventDate: '2020-01-01', guestCount: '0', budget: '', priorities: ['a', 'b', 'c', 'd'] }),
+      '2026-10-28',
+    );
     assert.deepEqual(Object.keys(errors).sort(), ['budget', 'eventDate', 'guestCount', 'priorities']);
-    assert.deepEqual(validatePayload(toPayload({ eventDate: '2026-11-01', guestCount: '10', budget: '5000' }), '2026-10-28'), {});
+    assert.deepEqual(
+      validatePayload(toPayload({ eventDate: '2026-11-01', guestCount: '10', budget: '5000' }), '2026-10-28'),
+      {},
+    );
   });
 });

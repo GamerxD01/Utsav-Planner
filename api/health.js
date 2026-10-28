@@ -1,5 +1,5 @@
-/** Vercel serverless entry for GET /api/health (also reachable as /healthz). */
-import { createHandler } from '../src/app.js';
-import { buildDeps } from '../src/container.js';
-
-export default createHandler(buildDeps().deps);
+/**
+ * Vercel serverless entry for GET /api/health (also reachable as /healthz).
+ * Re-exports the shared handler so both routes run identical code.
+ */
+export { default } from './plan.js';

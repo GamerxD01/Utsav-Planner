@@ -3,6 +3,19 @@
  * @module format
  */
 
+/** Client-side limits mirroring the server's validation (the server stays authoritative). */
+export const MAX_PRIORITIES = 3;
+export const MAX_GUESTS = 5000;
+export const MIN_BUDGET = 100;
+
+/**
+ * Today's date in the user's local calendar, as YYYY-MM-DD.
+ * @param {Date} [now]
+ */
+export function todayIso(now = new Date()) {
+  return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())).toISOString().slice(0, 10);
+}
+
 /**
  * Format a whole-number amount in a currency.
  * @param {number} amount
@@ -19,8 +32,9 @@ export function formatMoney(amount, currency, locale = currency === 'INR' ? 'en-
  * @param {string} [locale]
  */
 export function formatDate(iso, locale = 'en-IN') {
-  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
-    .format(new Date(`${iso}T00:00:00Z`));
+  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(
+    new Date(`${iso}T00:00:00Z`),
+  );
 }
 
 /**
@@ -49,14 +63,20 @@ export function foldIcsLine(line) {
  * @returns {string}
  */
 export function buildIcs(plan, now = new Date()) {
-  const stamp = now.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const stamp = now
+    .toISOString()
+    .replace(/[-:]/g, '')
+    .replace(/\.\d{3}/, '');
   const compact = (/** @type {string} */ iso) => iso.replace(/-/g, '');
-  const nextDay = (/** @type {string} */ iso) => compact(new Date(Date.parse(`${iso}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10));
+  const nextDay = (/** @type {string} */ iso) =>
+    compact(new Date(Date.parse(`${iso}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10));
   const title = plan.event.name || `My ${plan.event.type}`;
 
   const events = [
     { uid: 'event', summary: `🎉 ${title}`, date: plan.event.date, description: 'Event day' },
-    ...plan.timeline.flatMap((phase) => phase.tasks.map((t) => ({ uid: t.id, summary: t.text, date: t.dueDate, description: phase.phase }))),
+    ...plan.timeline.flatMap((phase) =>
+      phase.tasks.map((t) => ({ uid: t.id, summary: t.text, date: t.dueDate, description: phase.phase })),
+    ),
   ];
 
   const lines = [
@@ -94,7 +114,7 @@ export function progressKey(plan) {
 export function toPayload(values) {
   const one = (/** @type {string} */ k) => {
     const v = values[k];
-    return Array.isArray(v) ? v[0] ?? '' : v ?? '';
+    return Array.isArray(v) ? (v[0] ?? '') : (v ?? '');
   };
   const many = values.priorities;
   return {
@@ -122,10 +142,11 @@ export function validatePayload(p, today) {
   const errors = {};
   if (!p.eventDate) errors.eventDate = 'Enter the event date.';
   else if (p.eventDate < today) errors.eventDate = 'The event date must be today or later.';
-  if (!Number.isInteger(p.guestCount) || p.guestCount < 1 || p.guestCount > 5000) {
-    errors.guestCount = 'Enter a whole number of guests between 1 and 5000.';
+  if (!Number.isInteger(p.guestCount) || p.guestCount < 1 || p.guestCount > MAX_GUESTS) {
+    errors.guestCount = `Enter a whole number of guests between 1 and ${MAX_GUESTS}.`;
   }
-  if (!Number.isFinite(p.budget) || p.budget < 100) errors.budget = 'Enter a total budget of at least 100.';
-  if (p.priorities.length > 3) errors.priorities = 'Pick at most 3 priorities.';
+  if (!Number.isFinite(p.budget) || p.budget < MIN_BUDGET)
+    errors.budget = `Enter a total budget of at least ${MIN_BUDGET}.`;
+  if (p.priorities.length > MAX_PRIORITIES) errors.priorities = `Pick at most ${MAX_PRIORITIES} priorities.`;
   return errors;
 }

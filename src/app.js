@@ -40,17 +40,16 @@ export function sendJson(res, status, payload) {
  * @param {number} maxBytes
  */
 export function preParsedBody(body, maxBytes) {
-  const raw = body;
-  if (typeof raw === 'string' || Buffer.isBuffer(raw)) {
-    if (Buffer.byteLength(raw) > maxBytes) throw new HttpError(413, 'Request body too large');
+  if (typeof body === 'string' || Buffer.isBuffer(body)) {
+    if (Buffer.byteLength(body) > maxBytes) throw new HttpError(413, 'Request body too large');
     try {
-      return JSON.parse(raw.toString());
+      return JSON.parse(body.toString());
     } catch {
       throw new HttpError(400, 'Malformed JSON');
     }
   }
-  if (Buffer.byteLength(JSON.stringify(raw ?? null)) > maxBytes) throw new HttpError(413, 'Request body too large');
-  return raw;
+  if (Buffer.byteLength(JSON.stringify(body ?? null)) > maxBytes) throw new HttpError(413, 'Request body too large');
+  return body;
 }
 
 /**
@@ -115,49 +114,97 @@ export function readJsonBody(req, maxBytes) {
  *   logger?: Pick<Console, 'info' | 'error'>,
  * }} deps
  */
-export function createHandler({ config, planner, limiter, assets, aiEnabled, now = () => new Date(), logger = console }) {
+export function createHandler({
+  config,
+  planner,
+  limiter,
+  assets,
+  aiEnabled,
+  now = () => new Date(),
+  logger = console,
+}) {
+  /** @typedef {(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => Promise<void> | void} Route */
+
   /**
+   * Reject methods a route does not support.
    * @param {import('node:http').IncomingMessage} req
    * @param {import('node:http').ServerResponse} res
+   * @param {string[]} allowed
    */
-  async function handle(req, res) {
-    applySecurityHeaders(res);
-    const { pathname } = new URL(req.url ?? '/', 'http://localhost');
+  function requireMethod(req, res, allowed) {
+    if (allowed.includes(req.method ?? '')) return;
+    res.setHeader('Allow', allowed.join(', '));
+    throw new HttpError(405, 'Method not allowed');
+  }
 
-    if (pathname === '/api/plan') {
-      if (req.method !== 'POST') {
-        res.setHeader('Allow', 'POST');
-        throw new HttpError(405, 'Method not allowed');
-      }
-      const limit = limiter.take(clientIp(req));
-      res.setHeader('X-RateLimit-Remaining', String(limit.remaining));
-      if (!limit.allowed) {
-        res.setHeader('Retry-After', String(limit.retryAfterSec));
-        throw new HttpError(429, 'Too many requests. Please wait a moment and try again.');
-      }
-      const body = await readJsonBody(req, config.maxBodyBytes);
-      const result = validatePlanRequest(body, now());
-      if (!result.ok) throw new HttpError(422, 'Please fix the highlighted fields.', result.errors);
-
-      const started = Date.now();
-      const { plan, cached } = await planner.plan(result.value);
-      logger.info(JSON.stringify({ severity: 'INFO', message: 'plan generated', eventType: result.value.eventType, source: plan.source, cached, ms: Date.now() - started }));
-      sendJson(res, 200, { ...plan, cached });
-      return;
+  /** POST /api/plan — validate, rate limit and generate a plan. @type {Route} */
+  async function planRoute(req, res) {
+    requireMethod(req, res, ['POST']);
+    const limit = limiter.take(clientIp(req));
+    res.setHeader('X-RateLimit-Remaining', String(limit.remaining));
+    if (!limit.allowed) {
+      res.setHeader('Retry-After', String(limit.retryAfterSec));
+      throw new HttpError(429, 'Too many requests. Please wait a moment and try again.');
     }
+    const result = validatePlanRequest(await readJsonBody(req, config.maxBodyBytes), now());
+    if (!result.ok) throw new HttpError(422, 'Please fix the highlighted fields.', result.errors);
 
-    if (pathname === '/healthz' || pathname === '/api/health') {
-      sendJson(res, 200, { status: 'ok', ai: aiEnabled });
-      return;
-    }
+    const started = Date.now();
+    const { plan, cached } = await planner.plan(result.value);
+    logger.info(
+      JSON.stringify({
+        severity: 'INFO',
+        message: 'plan generated',
+        eventType: result.value.eventType,
+        source: plan.source,
+        cached,
+        ms: Date.now() - started,
+      }),
+    );
+    sendJson(res, 200, { ...plan, cached });
+  }
 
-    if (req.method !== 'GET' && req.method !== 'HEAD') {
-      res.setHeader('Allow', 'GET, HEAD');
-      throw new HttpError(405, 'Method not allowed');
-    }
-    const asset = assets.get(pathname);
+  /** GET /healthz and /api/health — liveness plus whether Gemini is configured. @type {Route} */
+  function healthRoute(_req, res) {
+    sendJson(res, 200, { status: 'ok', ai: aiEnabled });
+  }
+
+  /** Everything else — static assets from the in-memory whitelist. @type {Route} */
+  function staticRoute(req, res) {
+    requireMethod(req, res, ['GET', 'HEAD']);
+    const asset = assets.get(new URL(req.url ?? '/', 'http://localhost').pathname);
     if (!asset) throw new HttpError(404, 'Not found');
     sendAsset(req, res, asset);
+  }
+
+  /** @type {Record<string, Route>} */
+  const routes = { '/api/plan': planRoute, '/api/health': healthRoute, '/healthz': healthRoute };
+
+  /**
+   * Map any error to a safe JSON response (no internals leaked on 5xx).
+   * @param {import('node:http').ServerResponse} res
+   * @param {unknown} error
+   */
+  function sendError(res, error) {
+    const known = error instanceof HttpError ? error : null;
+    const status = known ? known.status : 500;
+    if (status >= 500) {
+      logger.error(
+        JSON.stringify({
+          severity: 'ERROR',
+          message: 'unhandled error',
+          error: String(error instanceof Error ? error.stack : error),
+        }),
+      );
+    }
+    if (res.headersSent) {
+      res.end();
+      return;
+    }
+    sendJson(res, status, {
+      error: known && status < 500 ? known.message : 'Something went wrong. Please try again.',
+      ...(known?.details ? { fields: known.details } : {}),
+    });
   }
 
   /**
@@ -165,18 +212,15 @@ export function createHandler({ config, planner, limiter, assets, aiEnabled, now
    * @param {import('node:http').IncomingMessage} req
    * @param {import('node:http').ServerResponse} res
    */
-  return (req, res) => handle(req, res).catch((error) => {
-    const status = error instanceof HttpError ? error.status : 500;
-    if (status >= 500) logger.error(JSON.stringify({ severity: 'ERROR', message: 'unhandled error', error: String(error?.stack ?? error) }));
-    if (res.headersSent) {
-      res.end();
-      return;
+  return async (req, res) => {
+    applySecurityHeaders(res);
+    const { pathname } = new URL(req.url ?? '/', 'http://localhost');
+    try {
+      await (routes[pathname] ?? staticRoute)(req, res);
+    } catch (error) {
+      sendError(res, error);
     }
-    sendJson(res, status, {
-      error: status >= 500 ? 'Something went wrong. Please try again.' : error.message,
-      ...(error instanceof HttpError && error.details ? { fields: error.details } : {}),
-    });
-  });
+  };
 }
 
 /**

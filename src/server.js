@@ -16,11 +16,13 @@ server.headersTimeout = 30_000;
 server.requestTimeout = 60_000;
 
 server.listen(config.port, () => {
-  console.info(JSON.stringify({
-    severity: 'INFO',
-    message: `Utsav planner listening on :${config.port}`,
-    model: gemini.enabled ? config.gemini.model : 'fallback-only (GEMINI_API_KEY not set)',
-  }));
+  console.info(
+    JSON.stringify({
+      severity: 'INFO',
+      message: `Utsav planner listening on :${config.port}`,
+      model: gemini.enabled ? config.gemini.model : 'fallback-only (GEMINI_API_KEY not set)',
+    }),
+  );
 });
 
 const shutdown = () => {

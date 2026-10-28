@@ -23,14 +23,24 @@ export function validBody(overrides = {}) {
 export const AI_RESPONSE = Object.freeze({
   summary: 'A warm pastel garden wedding for 250 guests in Lucknow.',
   ideas: [
-    { title: 'Awadhi live counters', description: 'Kebab and biryani stations with vegetarian galouti.', category: 'food' },
+    {
+      title: 'Awadhi live counters',
+      description: 'Kebab and biryani stations with vegetarian galouti.',
+      category: 'food',
+    },
     { title: 'Garden ceremony arch', description: 'Pastel florals with reusable frames.', category: 'decor' },
     { title: 'Ramp-first layout', description: 'Step-free paths for all guests.', category: 'unknown-category' },
     { title: '', description: 'dropped: no title', category: 'theme' },
   ],
   budgetTips: ['Use seasonal flowers', 'Negotiate packages'],
-  vendorTips: [{ vendor: 'Caterer', tip: 'Ask for a Jain menu option.' }, { vendor: 'Venue', tip: 'Confirm ramp access.' }],
-  extraTasks: [{ task: 'Book mehendi artist', weeksBefore: 8 }, { task: 'bad', weeksBefore: -1 }],
+  vendorTips: [
+    { vendor: 'Caterer', tip: 'Ask for a Jain menu option.' },
+    { vendor: 'Venue', tip: 'Confirm ramp access.' },
+  ],
+  extraTasks: [
+    { task: 'Book mehendi artist', weeksBefore: 8 },
+    { task: 'bad', weeksBefore: -1 },
+  ],
   risks: ['Monsoon rain risk — keep an indoor backup.'],
 });
 

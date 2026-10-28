@@ -46,12 +46,14 @@ export function allocate(total, weights) {
   const raw = entries.map(([key, w]) => ({ key, exact: total * w }));
   const floored = raw.map((r) => ({ ...r, amount: Math.floor(r.exact), rem: r.exact - Math.floor(r.exact) }));
   let leftover = total - floored.reduce((a, r) => a + r.amount, 0);
-  [...floored].sort((a, b) => b.rem - a.rem).forEach((r) => {
-    if (leftover > 0) {
-      r.amount += 1;
-      leftover -= 1;
-    }
-  });
+  [...floored]
+    .sort((a, b) => b.rem - a.rem)
+    .forEach((r) => {
+      if (leftover > 0) {
+        r.amount += 1;
+        leftover -= 1;
+      }
+    });
   return Object.fromEntries(floored.map((r) => [r.key, r.amount]));
 }
 
@@ -82,7 +84,7 @@ export function buildBudget(req) {
       percent: Math.round((amounts[category] / req.budget) * 1000) / 10,
       prioritized: boosted.has(category),
     }))
-    .sort((a, b) => (a.category === 'contingency') - (b.category === 'contingency') || b.amount - a.amount);
+    .sort((a, b) => Number(a.category === 'contingency') - Number(b.category === 'contingency') || b.amount - a.amount);
 
   return {
     total: req.budget,

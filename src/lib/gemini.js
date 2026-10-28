@@ -35,11 +35,15 @@ export function extractText(payload) {
 }
 
 /**
- * Parse JSON, tolerating an accidental ```json fence.
+ * Parse JSON, tolerating an accidental Markdown code fence around it.
  * @param {string} text
  */
 export function parseJsonText(text) {
-  const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```$/, '').trim();
+  const cleaned = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```$/, '')
+    .trim();
   return JSON.parse(cleaned);
 }
 
@@ -49,7 +53,15 @@ export function parseJsonText(text) {
  *   thinkingLevel?: string, fetchImpl?: typeof fetch, now?: () => number,
  * }} options
  */
-export function createGeminiClient({ apiKey, model, fallbackModel = '', timeoutMs, thinkingLevel = 'low', fetchImpl = fetch, now = Date.now }) {
+export function createGeminiClient({
+  apiKey,
+  model,
+  fallbackModel = '',
+  timeoutMs,
+  thinkingLevel = 'low',
+  fetchImpl = fetch,
+  now = Date.now,
+}) {
   const models = [...new Set([model, fallbackModel].filter(Boolean))];
 
   /**
@@ -108,16 +120,24 @@ export function createGeminiClient({ apiKey, model, fallbackModel = '', timeoutM
         } catch (firstError) {
           let error = firstError;
           // A model that rejects the thinking setting gets one plain retry.
-          if (error instanceof GeminiError && error.status === 400 && thinkingLevel && deadline - now() >= MIN_ATTEMPT_MS) {
+          if (
+            error instanceof GeminiError &&
+            error.status === 400 &&
+            thinkingLevel &&
+            deadline - now() >= MIN_ATTEMPT_MS
+          ) {
             try {
               return await call(models[i], JSON.stringify(plainRequest), deadline - now());
             } catch (retryError) {
               error = retryError;
             }
           }
-          lastError = error instanceof GeminiError
-            ? error
-            : new GeminiError(error instanceof Error ? `${error.name}: ${error.message} (${models[i]})` : 'Gemini request failed');
+          lastError =
+            error instanceof GeminiError
+              ? error
+              : new GeminiError(
+                  error instanceof Error ? `${error.name}: ${error.message} (${models[i]})` : 'Gemini request failed',
+                );
           const failover = lastError.status === undefined || RETRYABLE.has(lastError.status);
           if (!failover) break;
         }

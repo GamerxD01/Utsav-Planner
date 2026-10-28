@@ -47,13 +47,25 @@ src/
     security.js    CSP and security headers
     static.js      in-memory, pre-compressed static assets
 api/               Vercel serverless functions (plan, health)
-public/            accessible UI (index.html, styles.css, js/)
+public/            accessible UI
+  index.html, styles.css
+  js/app.js        entry point: submit flow and plan actions
+  js/form.js       form reading, accessible error summary, busy state
+  js/render.js     renders the plan (budget, timeline, vendors, ideas)
+  js/dom.js        safe element builder ($, el) and storage wrapper
+  js/format.js     pure helpers shared with tests (money, dates, .ics, validation)
+  js/types.js      JSDoc types for the plan payload
 tests/             node:test suite (unit + HTTP integration)
 ```
 
 ## How it meets the evaluation criteria
 
-**Code quality** — small single-purpose ES modules, JSDoc types throughout, dependency injection (Gemini client, clock, cache, logger) for testability, ESLint 10 clean, no dead code.
+**Code quality**
+- Small, single-purpose ES modules on both server and client, with one route function per endpoint.
+- Fully typed with JSDoc and checked by the TypeScript compiler in `strict` mode (`npm run typecheck`, zero errors).
+- Dependency injection (Gemini client, clock, cache, logger, fetch) keeps every module unit-testable without network or time.
+- Named constants instead of magic numbers; a single composition root (`src/container.js`) shared by Cloud Run and Vercel.
+- ESLint 10 and Prettier enforced, `.editorconfig` for consistent formatting, and GitHub Actions CI running lint, type check, format check and tests on every push.
 
 **Security**
 - API key stays server-side, sent in the `x-goog-api-key` header (never in URLs or the browser). On Cloud Run it is read from **Secret Manager**.
@@ -71,7 +83,7 @@ tests/             node:test suite (unit + HTTP integration)
 - No frontend framework or build step; the whole UI is a few KB. A single time budget per plan with automatic failover to a faster backup model and low thinking level, keeping responses well inside serverless limits.
 - Tiny Alpine image, fast cold starts on Cloud Run.
 
-**Testing** — 60 tests with Node's built-in runner, ~99% line coverage: validation edge cases, budget maths (sums are exact), timeline compression, checklist, prompt/output sanitisation, Gemini client (retry, no-retry on 4xx, key not in URL), cache/dedupe/fallback, and full HTTP integration (headers, 304, traversal, 413/415/422/405/429).
+**Testing** — 64 tests with Node's built-in runner, ~99% line coverage: validation edge cases, budget maths (sums are exact), timeline compression, checklist, prompt/output sanitisation, Gemini client (model failover, time budget, no failover on 4xx, key never in the URL), cache/dedupe/fallback, and full HTTP integration (headers, 304, traversal, 413/415/422/405/429).
 
 **Accessibility** (WCAG 2.2 AA; **0 axe-core violations** in light and dark mode)
 - Semantic landmarks, skip link, one `h1`, logical headings, `lang` set.
@@ -97,7 +109,10 @@ Without a key the app still works using curated fallback suggestions.
 ```bash
 npm test               # run the test suite
 npm run test:coverage  # with coverage
-npm run lint
+npm run lint           # ESLint
+npm run typecheck      # TypeScript strict check of the JSDoc types
+npm run format:check   # Prettier
+npm run check          # all of the above, as run in CI
 ```
 
 ## Deploy to Vercel

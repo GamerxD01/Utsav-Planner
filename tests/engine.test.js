@@ -39,7 +39,13 @@ describe('budget engine', () => {
   });
 
   it('buildBudget returns sorted lines with contingency last and per-guest cost', () => {
-    const budget = buildBudget({ eventType: 'wedding', budget: 1_000_000, guestCount: 200, currency: 'INR', priorities: ['food'] });
+    const budget = buildBudget({
+      eventType: 'wedding',
+      budget: 1_000_000,
+      guestCount: 200,
+      currency: 'INR',
+      priorities: ['food'],
+    });
     assert.equal(budget.perGuest, 5000);
     assert.equal(sum(budget.lines.map((l) => l.amount)), 1_000_000);
     assert.equal(budget.lines.at(-1)?.category, 'contingency');
@@ -78,7 +84,9 @@ describe('timeline engine', () => {
   });
 
   it('keeps tasks in chronological order and merges AI tasks', () => {
-    const timeline = buildTimeline({ eventType: 'community', eventDate: '2027-06-01', leadDays: 200 }, [{ task: 'Book drone permit', weeksBefore: 6 }]);
+    const timeline = buildTimeline({ eventType: 'community', eventDate: '2027-06-01', leadDays: 200 }, [
+      { task: 'Book drone permit', weeksBefore: 6 },
+    ]);
     const dates = timeline.flatMap((p) => p.tasks.map((t) => t.dueDate));
     assert.deepEqual(dates, [...dates].sort());
     const ai = timeline.flatMap((p) => p.tasks).find((t) => t.source === 'ai');
@@ -89,8 +97,13 @@ describe('timeline engine', () => {
 
 describe('vendor checklist', () => {
   it('sorts by booking date and attaches matching AI tips', () => {
-    const list = buildChecklist({ eventType: 'wedding', eventDate: '2027-10-28', leadDays: 365 }, [{ vendor: 'Caterer', tip: 'Ask for a tasting.' }]);
-    assert.deepEqual(list.map((v) => v.bookBy), [...list.map((v) => v.bookBy)].sort());
+    const list = buildChecklist({ eventType: 'wedding', eventDate: '2027-10-28', leadDays: 365 }, [
+      { vendor: 'Caterer', tip: 'Ask for a tasting.' },
+    ]);
+    assert.deepEqual(
+      list.map((v) => v.bookBy),
+      [...list.map((v) => v.bookBy)].sort(),
+    );
     assert.equal(list.find((v) => v.id === 'caterer')?.tip, 'Ask for a tasting.');
     assert.ok(list.every((v) => v.questions.length >= 3));
   });
