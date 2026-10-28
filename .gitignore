@@ -4,3 +4,6 @@ coverage/
 *.log
 .DS_Store
 .vercel
+*.mp4
+*.mp3
+connect-repo.bat
