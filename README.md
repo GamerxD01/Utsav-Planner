@@ -1,5 +1,7 @@
 # ✦ Utsav — GenAI Event Planning Assistant
 
+**Live demo:** https://utsav-planner-flax.vercel.app
+
 Utsav helps people organise **weddings, birthdays and community events**. Enter a few details and it returns a complete, personalised plan:
 
 | Problem statement asks for | What Utsav delivers |
@@ -28,8 +30,9 @@ node:http server (zero runtime dependencies) ── security headers, rate limit
 
 ```
 src/
-  server.js        entry point, graceful SIGTERM shutdown (Cloud Run)
-  app.js           routing, body parsing, errors
+  server.js        standalone entry point, graceful SIGTERM shutdown (Cloud Run / local)
+  container.js     composition root shared by server.js and the Vercel functions
+  app.js           request handler: routing, body parsing, errors
   config.js        env-based config
   lib/
     validation.js  strict input validation + sanitisation
@@ -43,6 +46,7 @@ src/
     rateLimiter.js token bucket per IP
     security.js    CSP and security headers
     static.js      in-memory, pre-compressed static assets
+api/               Vercel serverless functions (plan, health)
 public/            accessible UI (index.html, styles.css, js/)
 tests/             node:test suite (unit + HTTP integration)
 ```
@@ -67,7 +71,7 @@ tests/             node:test suite (unit + HTTP integration)
 - No frontend framework or build step; the whole UI is a few KB. Timeouts and a single retry with back-off on Gemini.
 - Tiny Alpine image, fast cold starts on Cloud Run.
 
-**Testing** — 55 tests with Node's built-in runner, ~99% line coverage: validation edge cases, budget maths (sums are exact), timeline compression, checklist, prompt/output sanitisation, Gemini client (retry, no-retry on 4xx, key not in URL), cache/dedupe/fallback, and full HTTP integration (headers, 304, traversal, 413/415/422/405/429).
+**Testing** — 60 tests with Node's built-in runner, ~99% line coverage: validation edge cases, budget maths (sums are exact), timeline compression, checklist, prompt/output sanitisation, Gemini client (retry, no-retry on 4xx, key not in URL), cache/dedupe/fallback, and full HTTP integration (headers, 304, traversal, 413/415/422/405/429).
 
 **Accessibility** (WCAG 2.2 AA; **0 axe-core violations** in light and dark mode)
 - Semantic landmarks, skip link, one `h1`, logical headings, `lang` set.
@@ -95,6 +99,14 @@ npm test               # run the test suite
 npm run test:coverage  # with coverage
 npm run lint
 ```
+
+## Deploy to Vercel
+
+The repo is Vercel-ready (`vercel.json`): the UI in `public/` is served from Vercel's CDN with the same security headers, and `api/plan.js` / `api/health.js` run the same request handler as serverless functions.
+
+1. Import the GitHub repo in Vercel (framework preset: **Other**).
+2. Add `GEMINI_API_KEY` under *Settings → Environment Variables* (mark it **Sensitive**).
+3. Deploy. Every push to `main` redeploys automatically.
 
 ## Deploy to Google Cloud Run
 
