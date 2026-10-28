@@ -137,7 +137,7 @@ form.addEventListener('submit', async (event) => {
   }
 
   clearErrors();
-  setBusy(true, 'Crafting your plan with Gemini… this usually takes a few seconds.');
+  setBusy(true, 'Crafting your personalised plan with Gemini… this can take up to 20 seconds.');
   try {
     const res = await fetch('/api/plan', {
       method: 'POST',
