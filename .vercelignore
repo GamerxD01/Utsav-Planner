@@ -1,0 +1,6 @@
+tests/
+coverage/
+.env
+Dockerfile
+.dockerignore
+.gcloudignore

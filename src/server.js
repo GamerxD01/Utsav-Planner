@@ -1,29 +1,16 @@
 /**
- * Entry point: wires configuration and dependencies, starts the server and
- * shuts down gracefully on SIGTERM (sent by Cloud Run before scaling in).
+ * Standalone entry point (local development and Google Cloud Run): serves the UI
+ * and API from one process and shuts down gracefully on SIGTERM.
  */
 import { fileURLToPath } from 'node:url';
 import { createApp } from './app.js';
-import { loadConfig } from './config.js';
-import { LruCache } from './lib/cache.js';
-import { createGeminiClient } from './lib/gemini.js';
-import { createPlanner } from './lib/planner.js';
-import { RateLimiter } from './lib/rateLimiter.js';
+import { buildDeps } from './container.js';
 import { loadAssets } from './lib/static.js';
 
-const config = loadConfig();
-const gemini = createGeminiClient(config.gemini);
-const planner = createPlanner({
-  gemini,
-  cache: new LruCache({ maxEntries: config.cache.maxEntries, ttlMs: config.cache.ttlMs }),
-});
-const server = createApp({
-  config,
-  planner,
-  limiter: new RateLimiter(config.rateLimit),
+const { config, gemini, deps } = buildDeps({
   assets: loadAssets(fileURLToPath(new URL('../public', import.meta.url))),
-  aiEnabled: gemini.enabled,
 });
+const server = createApp(deps);
 
 server.headersTimeout = 30_000;
 server.requestTimeout = 60_000;

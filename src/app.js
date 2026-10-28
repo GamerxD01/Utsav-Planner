@@ -35,6 +35,25 @@ export function sendJson(res, status, payload) {
 }
 
 /**
+ * Normalise a body that a hosting runtime already read.
+ * @param {unknown} body
+ * @param {number} maxBytes
+ */
+export function preParsedBody(body, maxBytes) {
+  const raw = body;
+  if (typeof raw === 'string' || Buffer.isBuffer(raw)) {
+    if (Buffer.byteLength(raw) > maxBytes) throw new HttpError(413, 'Request body too large');
+    try {
+      return JSON.parse(raw.toString());
+    } catch {
+      throw new HttpError(400, 'Malformed JSON');
+    }
+  }
+  if (Buffer.byteLength(JSON.stringify(raw ?? null)) > maxBytes) throw new HttpError(413, 'Request body too large');
+  return raw;
+}
+
+/**
  * Read a JSON body with a hard size cap.
  * @param {import('node:http').IncomingMessage} req
  * @param {number} maxBytes
@@ -47,6 +66,19 @@ export function readJsonBody(req, maxBytes) {
   }
   const declared = Number(req.headers['content-length'] ?? 0);
   if (declared > maxBytes) return Promise.reject(new HttpError(413, 'Request body too large'));
+
+  // Serverless runtimes (e.g. Vercel) may have already buffered and parsed the body.
+  if ('body' in req) {
+    return new Promise((resolve) => {
+      let body;
+      try {
+        body = /** @type {any} */ (req).body; // may be a parsing getter that throws
+      } catch {
+        throw new HttpError(400, 'Malformed JSON');
+      }
+      resolve(preParsedBody(body, maxBytes));
+    });
+  }
 
   return new Promise((resolve, reject) => {
     /** @type {Buffer[]} */
@@ -83,7 +115,7 @@ export function readJsonBody(req, maxBytes) {
  *   logger?: Pick<Console, 'info' | 'error'>,
  * }} deps
  */
-export function createApp({ config, planner, limiter, assets, aiEnabled, now = () => new Date(), logger = console }) {
+export function createHandler({ config, planner, limiter, assets, aiEnabled, now = () => new Date(), logger = console }) {
   /**
    * @param {import('node:http').IncomingMessage} req
    * @param {import('node:http').ServerResponse} res
@@ -128,18 +160,29 @@ export function createApp({ config, planner, limiter, assets, aiEnabled, now = (
     sendAsset(req, res, asset);
   }
 
-  return createServer((req, res) => {
-    handle(req, res).catch((error) => {
-      const status = error instanceof HttpError ? error.status : 500;
-      if (status >= 500) logger.error(JSON.stringify({ severity: 'ERROR', message: 'unhandled error', error: String(error?.stack ?? error) }));
-      if (res.headersSent) {
-        res.end();
-        return;
-      }
-      sendJson(res, status, {
-        error: status >= 500 ? 'Something went wrong. Please try again.' : error.message,
-        ...(error instanceof HttpError && error.details ? { fields: error.details } : {}),
-      });
+  /**
+   * Request listener usable by node:http or a serverless runtime.
+   * @param {import('node:http').IncomingMessage} req
+   * @param {import('node:http').ServerResponse} res
+   */
+  return (req, res) => handle(req, res).catch((error) => {
+    const status = error instanceof HttpError ? error.status : 500;
+    if (status >= 500) logger.error(JSON.stringify({ severity: 'ERROR', message: 'unhandled error', error: String(error?.stack ?? error) }));
+    if (res.headersSent) {
+      res.end();
+      return;
+    }
+    sendJson(res, status, {
+      error: status >= 500 ? 'Something went wrong. Please try again.' : error.message,
+      ...(error instanceof HttpError && error.details ? { fields: error.details } : {}),
     });
   });
+}
+
+/**
+ * Create the standalone HTTP server (local development and Cloud Run).
+ * @param {Parameters<typeof createHandler>[0]} deps
+ */
+export function createApp(deps) {
+  return createServer(createHandler(deps));
 }
