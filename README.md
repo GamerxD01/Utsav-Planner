@@ -68,7 +68,7 @@ tests/             node:test suite (unit + HTTP integration)
 **Efficiency**
 - One Gemini call per plan; identical requests served from an **LRU cache** and concurrent duplicates **coalesced**.
 - Static assets pre-compressed with **Brotli/gzip** at startup, with ETags (`304 Not Modified`) and cache headers.
-- No frontend framework or build step; the whole UI is a few KB. Timeouts and a single retry with back-off on Gemini.
+- No frontend framework or build step; the whole UI is a few KB. A single time budget per plan with automatic failover to a faster backup model and low thinking level, keeping responses well inside serverless limits.
 - Tiny Alpine image, fast cold starts on Cloud Run.
 
 **Testing** — 60 tests with Node's built-in runner, ~99% line coverage: validation edge cases, budget maths (sums are exact), timeline compression, checklist, prompt/output sanitisation, Gemini client (retry, no-retry on 4xx, key not in URL), cache/dedupe/fallback, and full HTTP integration (headers, 304, traversal, 413/415/422/405/429).
@@ -129,7 +129,9 @@ gcloud run deploy utsav-planner --source . --region asia-south1 --allow-unauthen
 | --- | --- | --- |
 | `GEMINI_API_KEY` | – | Gemini API key (optional; fallback mode without it) |
 | `GEMINI_MODEL` | `gemini-3.8-flash` | Model ID |
-| `GEMINI_TIMEOUT_MS` | `25000` | Per-request timeout |
+| `GEMINI_FALLBACK_MODEL` | `gemini-3.5-flash-lite` | Faster backup model used if the primary is overloaded or slow |
+| `GEMINI_THINKING_LEVEL` | `low` | Gemini thinking level (`off` to disable) |
+| `GEMINI_TIMEOUT_MS` | `22000` | Total time budget for Gemini per plan |
 | `RATE_LIMIT_PER_MINUTE` | `10` | Plan requests per IP per minute |
 | `PORT` | `8080` | Set automatically by Cloud Run |
 

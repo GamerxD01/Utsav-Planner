@@ -25,8 +25,13 @@ export function loadConfig(env = process.env) {
     nodeEnv: env.NODE_ENV ?? 'development',
     gemini: Object.freeze({
       apiKey: env.GEMINI_API_KEY ?? '',
-      model: env.GEMINI_MODEL ?? 'gemini-3.8-flash',
-      timeoutMs: toPositiveInt(env.GEMINI_TIMEOUT_MS, 25_000),
+      model: env.GEMINI_MODEL || 'gemini-3.8-flash',
+      // Faster backup used when the primary model is overloaded or slow.
+      fallbackModel: env.GEMINI_FALLBACK_MODEL || 'gemini-3.5-flash-lite',
+      // Low thinking keeps latency well inside serverless time limits; "off" disables it.
+      thinkingLevel: env.GEMINI_THINKING_LEVEL === 'off' ? '' : env.GEMINI_THINKING_LEVEL || 'low',
+      // Total budget for all Gemini attempts per plan.
+      timeoutMs: toPositiveInt(env.GEMINI_TIMEOUT_MS, 22_000),
     }),
     rateLimit: Object.freeze({
       capacity: toPositiveInt(env.RATE_LIMIT_PER_MINUTE, 10),

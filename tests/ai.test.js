@@ -62,7 +62,7 @@ describe('gemini client', () => {
 
   it('sends key in a header (not the URL) and requests JSON mode', async () => {
     const { impl, calls } = fakeFetch([{ json: geminiPayload({ ok: true }) }]);
-    const client = createGeminiClient({ apiKey: 'secret', model: 'gemini-test', timeoutMs: 1000, fetchImpl: impl });
+    const client = createGeminiClient({ apiKey: 'secret', model: 'gemini-test', timeoutMs: 10_000, fetchImpl: impl });
     const out = await client.generateJson({ system: 's', prompt: 'p', schema: {} });
     assert.deepEqual(out, { ok: true });
     assert.ok(!calls[0].url.includes('secret'));
@@ -72,25 +72,51 @@ describe('gemini client', () => {
     assert.equal(body.systemInstruction.parts[0].text, 's');
   });
 
-  it('retries once on 503 then succeeds', async () => {
+  it('sends a low thinking level by default', async () => {
+    const { impl, calls } = fakeFetch([{ json: geminiPayload({ ok: true }) }]);
+    const client = createGeminiClient({ apiKey: 'k', model: 'm', timeoutMs: 10_000, fetchImpl: impl });
+    await client.generateJson({ system: '', prompt: '', schema: {} });
+    assert.deepEqual(JSON.parse(calls[0].init.body).generationConfig.thinkingConfig, { thinkingLevel: 'low' });
+  });
+
+  it('fails over to the backup model on 503', async () => {
     const { impl, calls } = fakeFetch([{ status: 503 }, { json: geminiPayload({ ok: 1 }) }]);
-    const client = createGeminiClient({ apiKey: 'k', model: 'm', timeoutMs: 1000, fetchImpl: impl, retryDelayMs: 1 });
+    const client = createGeminiClient({ apiKey: 'k', model: 'primary', fallbackModel: 'backup', timeoutMs: 10_000, fetchImpl: impl });
     assert.deepEqual(await client.generateJson({ system: '', prompt: '', schema: {} }), { ok: 1 });
     assert.equal(calls.length, 2);
+    assert.match(calls[0].url, /primary:generateContent/);
+    assert.match(calls[1].url, /backup:generateContent/);
   });
 
-  it('does not retry on 400 and surfaces a GeminiError', async () => {
-    const { impl, calls } = fakeFetch([{ status: 400 }]);
-    const client = createGeminiClient({ apiKey: 'k', model: 'm', timeoutMs: 1000, fetchImpl: impl });
-    await assert.rejects(client.generateJson({ system: '', prompt: '', schema: {} }), GeminiError);
-    assert.equal(calls.length, 1);
-  });
-
-  it('retries network errors, then fails', async () => {
+  it('fails over on network errors or timeouts, then reports the last error', async () => {
     const { impl, calls } = fakeFetch([new Error('ECONNRESET'), new Error('ECONNRESET')]);
-    const client = createGeminiClient({ apiKey: 'k', model: 'm', timeoutMs: 1000, fetchImpl: impl });
-    await assert.rejects(client.generateJson({ system: '', prompt: '', schema: {} }), /ECONNRESET/);
+    const client = createGeminiClient({ apiKey: 'k', model: 'a', fallbackModel: 'b', timeoutMs: 10_000, fetchImpl: impl });
+    await assert.rejects(client.generateJson({ system: '', prompt: '', schema: {} }), /ECONNRESET \(b\)/);
     assert.equal(calls.length, 2);
+  });
+
+  it('retries once without thinkingConfig on 400, and never fails over on 4xx', async () => {
+    const { impl, calls } = fakeFetch([{ status: 400 }, { status: 400 }]);
+    const client = createGeminiClient({ apiKey: 'k', model: 'a', fallbackModel: 'b', timeoutMs: 10_000, fetchImpl: impl });
+    await assert.rejects(client.generateJson({ system: '', prompt: '', schema: {} }), (e) => e instanceof GeminiError && e.status === 400);
+    assert.equal(calls.length, 2);
+    assert.equal(JSON.parse(calls[1].init.body).generationConfig.thinkingConfig, undefined);
+    assert.ok(calls.every((c) => c.url.includes('/a:')));
+  });
+
+  it('recovers when only the thinking setting was rejected', async () => {
+    const { impl } = fakeFetch([{ status: 400 }, { json: geminiPayload({ ok: 2 }) }]);
+    const client = createGeminiClient({ apiKey: 'k', model: 'a', timeoutMs: 10_000, fetchImpl: impl });
+    assert.deepEqual(await client.generateJson({ system: '', prompt: '', schema: {} }), { ok: 2 });
+  });
+
+  it('stays within the overall time budget', async () => {
+    let t = 0;
+    const { impl, calls } = fakeFetch([{ status: 503 }, { json: geminiPayload({}) }]);
+    const slow = async (url, init) => { t += 9_000; return impl(url, init); };
+    const client = createGeminiClient({ apiKey: 'k', model: 'a', fallbackModel: 'b', timeoutMs: 10_000, fetchImpl: slow, now: () => t });
+    await assert.rejects(client.generateJson({ system: '', prompt: '', schema: {} }), /503/);
+    assert.equal(calls.length, 1);
   });
 
   it('is disabled and refuses to call without an API key', async () => {
