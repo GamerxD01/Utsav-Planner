@@ -13,6 +13,42 @@ Utsav helps people organise **weddings, birthdays and community events**. Enter 
 
 Extras: progress tracking saved in the browser, **export the timeline to Google Calendar / Outlook (.ics)**, print / save as PDF, light & dark mode.
 
+## Chosen vertical
+
+**Challenge 5 — Celebration & Event Planner.** The persona is someone organising a wedding, a birthday or a community event (often for the first time, often in India) who needs to turn a date, a guest count and a budget into a concrete plan: what to spend where, what to do when, whom to book, and ideas that fit their family and city.
+
+## Approach and logic
+
+Utsav is a **hybrid assistant**: a deterministic decision engine produces everything that must be correct (money and dates), and Google Gemini adds what benefits from creativity (ideas, tips, risks). Every decision is driven by the user's context:
+
+| User context | Decision the assistant makes | Where |
+| --- | --- | --- |
+| Event type (wedding / birthday / community) | Picks a different baseline budget split, task template and vendor list (e.g. permits and safety for community events, cake and entertainer for birthdays) | `constants.js`, `timeline.js`, `checklist.js` |
+| Top priorities (up to 3) | Boosts those categories ×1.5 and re-normalises the rest; the contingency share is never reduced; a priority without its own category is redirected (sustainability → decor, guest experience → favours) | `budget.js` |
+| Total budget + guest count | Splits the total with largest-remainder rounding so the lines always add up to the exact rupee; reports cost per guest | `budget.js` |
+| Days until the event | Uses ideal lead times when there is time; otherwise compresses every task proportionally so nothing is scheduled in the past, and flags tasks and vendors that are already late as **Urgent / Book now** | `timeline.js`, `checklist.js` |
+| City, theme, notes (dietary, accessibility, culture) | Sent to Gemini as data to personalise ideas, vendor tips, extra tasks and risks (e.g. "one grandparent uses a wheelchair" → accessible lawn pathways and a venue tip) | `prompt.js` |
+| Gemini slow, overloaded or offline | Fails over to a faster backup model within a fixed time budget; if that also fails, returns the full deterministic plan with curated suggestions, so the user is never left without a plan | `gemini.js`, `planner.js` |
+| Same request again | Served from cache (identical concurrent requests share one Gemini call) | `planner.js`, `cache.js` |
+
+## How the solution works
+
+1. **Input:** the user fills an accessible form (event type, date, guests, budget, currency, city, theme, up to 3 priorities, free-text notes). The browser validates it, and the server validates it again strictly.
+2. **Request:** `POST /api/plan` passes a rate limiter, then a body-size limit, then validation and sanitisation.
+3. **Deterministic plan:** `budget.js` computes the budget split, `timeline.js` the phased and dated timeline, and `checklist.js` the vendor list with book-by dates and questions to ask.
+4. **Personalisation:** `prompt.js` sends the validated context to Gemini as a delimited JSON block with a strict response schema; the JSON that comes back is re-validated and clamped before use.
+5. **Merge:** `planner.js` adds Gemini's extra tasks into the timeline and its vendor tips into the checklist, and attaches the ideas, money-saving tips and risks.
+6. **Output:** the UI renders the plan with safe DOM APIs. The user can tick tasks (saved in their browser), export the timeline to a calendar, or print it.
+
+## Assumptions
+
+- Budget weights are planning rules of thumb (e.g. food is the largest share of a wedding), not quotes; Utsav does not know real vendor prices, so it gives shares and tips rather than prices or brand names.
+- Ideal lead times reflect typical Indian wedding and event planning (venue about 10 months ahead for weddings, about 6 weeks for birthdays, permits about 2 months for community events).
+- Dates are calendar dates (UTC midnight). Events can be planned from today up to 3 years ahead, for 1 to 5,000 guests.
+- One currency per plan. Amounts are shown in the chosen currency without conversion.
+- AI suggestions can be wrong. The UI says so, and nothing the user must rely on (totals, dates) comes from the model.
+- No accounts and no database: plans are not stored on the server. Checklist progress stays in the user's own browser.
+
 ## Architecture
 
 ```
